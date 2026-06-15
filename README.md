@@ -316,6 +316,6 @@ Không sử dụng cho mục đích thương mại khi chưa có sự đồng ý
 
 <div align="center">
 
-Made with ❤️ by SmartEnglish AI Team · 2025
+Made with ❤️ by SmartEnglish AI Team · 2026
 
 </div>
