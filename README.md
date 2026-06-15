@@ -201,7 +201,7 @@ features/[feature]/
 ### 1. Clone repository
 
 ```bash
-git clone https://github.com/[your-username]/smartenglish-mobile.git
+git clone https://github.com/TuanANh561/smartenglish-mobile.git
 cd smartenglish-mobile
 ```
 
