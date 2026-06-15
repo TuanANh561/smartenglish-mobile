@@ -290,8 +290,8 @@ Font: **Inter** (Google Fonts) · Border radius card: `16px` · Spacing: bội s
 |Nguyễn Tuấn Anh|—   |Mobile Developer — UI & Integration|
 
 **Giáo viên hướng dẫn:** *(tên cô/thầy)*  
-**Trường:** *(tên trường)*  
-**Năm:** 2025
+**Trường:** *(Trường Đại Học Công Nghiệp Tp. Hồ Chí Minh - IUH)*  
+**Năm:** 2026
 
 -----
 
