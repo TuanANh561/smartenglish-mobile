@@ -1,162 +1,170 @@
-# API Reference — SmartEnglish AI
+# API Reference — SmartEnglish AI (Spring Boot Microservices)
 
 ## Base URL
 ```
-DEV:  http://localhost:3000/api/v1
-PROD: https://api.smartenglish.ai/v1
+DEV:  http://localhost:8080/api/v1
+PROD: https://api.smartenglish.ai/api/v1
 ```
 Cấu hình trong `.env` → `API_BASE_URL`
+
+Nếu backend tách microservice qua API Gateway (Spring Cloud Gateway), mọi request từ Flutter
+vẫn chỉ gọi 1 base URL duy nhất (gateway), không cần biết service nào xử lý phía sau.
 
 ## Auth Headers
 ```
 Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
+Token là JWT do `auth-service` (Spring Boot) cấp, xác thực qua Spring Security.
 
 ---
 
-## AUTH
+## Quy ước response chuẩn Spring Boot
+
+### Response thành công
+Spring Boot thường wrap response theo 1 trong 2 dạng — xác nhận với backend dev dạng nào được dùng:
+
+**Dạng A — trả trực tiếp đối tượng/list:**
+```json
+{ "id": "uuid", "word": "apple", "ipa": "/ˈæp.əl/" }
+```
+
+**Dạng B — wrap chuẩn (khuyến nghị dùng nếu team tự định nghĩa):**
+```json
+{
+  "success": true,
+  "data": { "id": "uuid", "word": "apple" },
+  "timestamp": "2026-06-27T10:00:00Z"
+}
+```
+
+### Response lỗi — theo chuẩn RFC 7807 (ProblemDetail, mặc định Spring Boot 3.x)
+```json
+{
+  "type": "https://api.smartenglish.ai/errors/limit-exceeded",
+  "title": "Scan limit exceeded",
+  "status": 429,
+  "detail": "Bạn đã dùng hết 10 lượt quét ảnh hôm nay",
+  "instance": "/api/v1/scan/analyze",
+  "code": "LIMIT_EXCEEDED",
+  "resetAt": "2026-06-28T00:00:00Z"
+}
+```
+Trong Flutter, parse field `code` để xử lý logic (switch theo `AppErrorCode`), dùng `detail`
+để hiển thị message cho người dùng (đã là tiếng Việt do backend trả sẵn).
+
+---
+
+## AUTH SERVICE
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
 | POST | `/auth/register` | Đăng ký email |
-| POST | `/auth/login` | Đăng nhập |
+| POST | `/auth/login` | Đăng nhập, trả `accessToken` + `refreshToken` |
 | POST | `/auth/oauth/google` | Google OAuth |
-| POST | `/auth/oauth/apple` | Apple OAuth |
-| POST | `/auth/refresh` | Refresh token |
-| POST | `/auth/logout` | Đăng xuất |
-| POST | `/auth/forgot-password` | Quên mật khẩu |
+| POST | `/auth/refresh` | Refresh token (Spring Security filter) |
+| POST | `/auth/logout` | Đăng xuất, revoke refresh token |
 
-## USER & PROFILE
+## USER SERVICE
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/users/me` | Lấy thông tin người dùng hiện tại |
+| GET | `/users/me` | Thông tin người dùng hiện tại |
 | PATCH | `/users/me` | Cập nhật profile |
 | GET | `/users/me/stats` | XP, level, streak, badges |
 | GET | `/users/me/plan` | Thông tin gói Premium |
 
-## IMAGE SCAN
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| POST | `/scan/analyze` | Upload ảnh, nhận từ vựng (multipart/form-data) |
-| GET | `/scan/history` | Lịch sử ảnh đã quét |
-| GET | `/scan/daily-usage` | Số lượt còn lại hôm nay (Free) |
-| POST | `/scan/{scanId}/save-word` | Lưu từ vào SRS |
+## AI SERVICE (ai-service — gọi Gemini phía sau)
+> Toàn bộ endpoint dưới đây do `ai-service` xử lý, microservice này gọi Gemini API,
+> KHÔNG bao giờ để Flutter gọi trực tiếp Gemini.
 
-Request scan: `{ image: File }`
-Response: `{ scanId, objects: [{ label, ipa, meaningVi, audioUrl, boundingBox, examples? }] }`
+| Method | Endpoint | Mô tả | Gemini model dùng |
+|--------|----------|-------|---|
+| POST | `/ai/image-recognition` | Upload ảnh, nhận diện vật thể + từ vựng | gemini-2.5-flash (vision) |
+| POST | `/ai/quiz/generate` | Sinh câu hỏi quiz từ từ vựng user | gemini-2.5-flash |
+| POST | `/ai/writing/check` | Kiểm tra & chấm điểm bài viết | gemini-2.5-pro |
+| POST | `/ai/speaking/score` | Chấm điểm phát âm (tổng quát) | gemini-2.5-flash |
+| POST | `/ai/chat/message` | Gửi tin nhắn chatbot | gemini-2.5-flash |
+| POST | `/ai/roleplay/turn` | Gửi lượt thoại trong Roleplay | gemini-2.5-flash |
+| POST | `/ai/learning-path/analyze` | Phân tích Placement Test, đề xuất lộ trình | gemini-2.5-flash |
 
-## VOCABULARY & FLASHCARD
+### Request mẫu — Image Recognition
+```
+POST /ai/image-recognition
+Content-Type: multipart/form-data
+
+image: <file>
+```
+Response:
+```json
+{
+  "scanId": "uuid",
+  "objects": [
+    {
+      "label": "coffee cup",
+      "confidence": 0.94,
+      "ipa": "/ˈkɒfi kʌp/",
+      "meaningVi": "Tách cà phê",
+      "examples": ["She drinks from a coffee cup every morning."],
+      "boundingBox": { "x": 120, "y": 80, "width": 200, "height": 180 }
+    }
+  ]
+}
+```
+
+### Request mẫu — Quiz Generator
+```json
+POST /ai/quiz/generate
+{
+  "questionCount": 10,
+  "types": ["multiple_choice", "fill_blank"],
+  "topicId": "travel",
+  "cefrLevel": "B1"
+}
+```
+
+### Request mẫu — Chat message (có thể stream qua SSE)
+```json
+POST /ai/chat/message
+{
+  "conversationId": "uuid",
+  "message": "What's the difference between 'make' and 'do'?"
+}
+```
+Nếu backend dùng Server-Sent Events để stream response Gemini theo từng token,
+Flutter xử lý bằng `Dio` + `ResponseType.stream`, xem ví dụ ở `rules/ai-integration.md`.
+
+## VOCABULARY & FLASHCARD SERVICE
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
 | GET | `/vocab/topics` | Danh sách chủ đề |
-| GET | `/vocab/topics/{topicId}/words` | Từ vựng theo chủ đề |
 | GET | `/vocab/words/{wordId}` | Chi tiết một từ |
-| GET | `/vocab/search?q=` | Tìm kiếm từ điển |
-| GET | `/decks` | Danh sách bộ thẻ của user |
-| POST | `/decks` | Tạo bộ thẻ mới |
-| GET | `/decks/{deckId}/cards` | Thẻ trong bộ |
+| GET | `/decks` | Bộ thẻ của user |
 | POST | `/decks/{deckId}/cards` | Thêm thẻ vào bộ |
-| DELETE | `/decks/{deckId}/cards/{cardId}` | Xóa thẻ |
 | GET | `/srs/due-today` | Thẻ cần ôn hôm nay |
-| POST | `/srs/review` | Gửi kết quả review (rating: 0-3) |
+| POST | `/srs/review` | Gửi kết quả review (rating 0–3) |
 
-## QUIZ
+## GAMIFICATION SERVICE
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| POST | `/quiz/generate` | Tạo đề quiz AI |
-| GET | `/quiz/{quizId}` | Lấy đề quiz |
-| POST | `/quiz/{quizId}/attempt` | Bắt đầu làm bài |
-| POST | `/quiz/attempts/{attemptId}/answer` | Gửi đáp án từng câu |
-| POST | `/quiz/attempts/{attemptId}/submit` | Nộp bài |
-| GET | `/quiz/attempts/{attemptId}/result` | Kết quả chi tiết |
-| GET | `/quiz/history` | Lịch sử làm bài |
-
-Request generate: `{ questionCount: 10, types: ['multiple_choice','fill_blank'], topicId?, cefrLevel? }`
-
-## SPEAKING
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| POST | `/speaking/pronunciation` | Upload audio, nhận điểm phát âm |
-| GET | `/speaking/roleplay/scenarios` | Danh sách kịch bản hội thoại |
-| POST | `/speaking/roleplay/sessions` | Bắt đầu session roleplay |
-| POST | `/speaking/roleplay/sessions/{id}/turn` | Gửi lượt thoại (audio) |
-| POST | `/speaking/roleplay/sessions/{id}/end` | Kết thúc session |
-
-Request pronunciation: `{ audio: File, wordId?, targetText, targetIpa? }` (multipart)
-Response: `{ overallScore, accuracyScore, stressScore, intonationScore, phonemeErrors[], feedback[] }`
-
-## CHATBOT & WRITING
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| POST | `/chat/conversations` | Tạo cuộc trò chuyện mới |
-| POST | `/chat/conversations/{id}/messages` | Gửi tin nhắn |
-| GET | `/chat/conversations/{id}/messages` | Lịch sử tin nhắn |
-| GET | `/chat/daily-usage` | Số tin nhắn còn lại (Free) |
-| POST | `/writing/check` | Kiểm tra bài viết |
-| GET | `/writing/submissions/{id}` | Lấy kết quả kiểm tra |
-
-## READING & LISTENING
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/content/articles` | Danh sách bài đọc (filter: level, topic) |
-| GET | `/content/articles/{id}` | Chi tiết bài đọc + transcript |
-| GET | `/content/audio` | Danh sách bài nghe |
-| GET | `/content/audio/{id}` | Chi tiết bài nghe + karaoke sync |
-| POST | `/content/{id}/complete` | Đánh dấu hoàn thành bài |
-
-## LEARNING PATH
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| POST | `/placement/submit` | Nộp bài kiểm tra đầu vào |
-| GET | `/placement/result` | Kết quả & phân tích lỗ hổng |
-| GET | `/learning-path/today` | Kế hoạch học hôm nay |
-| GET | `/learning-path/overview` | Lộ trình tổng thể |
-
-## GAMIFICATION
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/gamification/stats` | XP, level, streak, coins, league |
-| GET | `/gamification/badges` | Danh sách badges (earned + locked) |
-| GET | `/gamification/leaderboard` | Bảng xếp hạng phòng tuần này |
+| GET | `/gamification/stats` | XP, level, streak, coins |
+| GET | `/gamification/leaderboard` | Bảng xếp hạng tuần |
 | GET | `/gamification/daily-challenge` | Thử thách hôm nay |
-| POST | `/gamification/shop/purchase` | Mua item trong Coin Shop |
-| GET | `/gamification/shop/items` | Danh sách vật phẩm cửa hàng |
 
-## ANALYTICS
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/analytics/overview` | Tổng quan tiến độ |
-| GET | `/analytics/daily-stats?days=30` | Thống kê theo ngày |
-| GET | `/analytics/streak-calendar` | Dữ liệu heatmap calendar |
-
-## PAYMENT
+## PAYMENT SERVICE
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
 | GET | `/payment/plans` | Danh sách gói Premium |
 | POST | `/payment/orders` | Tạo đơn hàng |
-| POST | `/payment/orders/{id}/verify` | Xác nhận thanh toán |
 | GET | `/payment/orders/history` | Lịch sử giao dịch |
 
 ---
 
-## Error Response Format
-```json
-{
-  "success": false,
-  "error": {
-    "code": "LIMIT_EXCEEDED",
-    "message": "Bạn đã dùng hết 10 lượt quét hôm nay",
-    "details": { "resetAt": "2025-01-15T00:00:00Z" }
-  }
-}
-```
-
-## Common Error Codes
-| Code | Ý nghĩa | Xử lý |
+## Common Error Codes (field `code` trong ProblemDetail)
+| Code | Ý nghĩa | Xử lý phía Flutter |
 |------|---------|-------|
-| `UNAUTHORIZED` | Token hết hạn | Refresh token tự động |
-| `PREMIUM_REQUIRED` | Cần gói Premium | Show PremiumGateWidget |
-| `LIMIT_EXCEEDED` | Vượt giới hạn Free | Show thông báo + nâng cấp |
+| `UNAUTHORIZED` | Token hết hạn/sai | Gọi `/auth/refresh`, nếu fail → logout |
+| `PREMIUM_REQUIRED` | Cần gói Premium | Show `PremiumGateWidget` |
+| `LIMIT_EXCEEDED` | Vượt giới hạn Free | Show thông báo + nút nâng cấp |
+| `AI_SERVICE_UNAVAILABLE` | Gemini API lỗi/timeout phía backend | Show "Thử lại sau", có nút Retry |
+| `VALIDATION_ERROR` | Dữ liệu gửi sai (Spring `@Valid` reject) | Hiện lỗi field cụ thể từ response |
 | `NOT_FOUND` | Resource không tồn tại | Show ErrorView |
-| `VALIDATION_ERROR` | Dữ liệu gửi sai | Show lỗi trên form |
-| `SERVER_ERROR` | Lỗi server | Show retry |
+| `INTERNAL_SERVER_ERROR` | Lỗi server | Show retry, log lại để báo backend team |

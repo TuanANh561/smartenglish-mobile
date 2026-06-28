@@ -106,7 +106,7 @@ Dashboard thống kê tiến độ học, biểu đồ Radar 5 kỹ năng, heatm
                       ▼
         ┌─────────────────────────────┐
         │   ⚙️  Backend API           │
-        │  (Node.js / FastAPI)        │
+        │  (Spring boot / Microservice)        │
         │  (repo riêng)               │
         └──────────┬──────────────────┘
                    │

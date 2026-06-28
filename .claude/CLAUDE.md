@@ -1,48 +1,74 @@
 # SmartEnglish AI — Project Brain
 
 ## Tổng quan dự án
-Ứng dụng học tiếng Anh đa nền tảng tích hợp AI.
-- **Mobile**: Flutter (iOS + Android)
-- **Web Admin**: Flutter Web (chỉ dùng Chrome để test)
-- **Backend**: Node.js/FastAPI (riêng, không nằm trong repo này)
+Ứng dụng học tiếng Anh tích hợp AI, dành cho Mobile (iOS + Android).
+- **Mobile**: Flutter
+- **Backend**: Spring Boot Microservices (repo riêng, không nằm trong repo Flutter này)
+- **AI Engine**: Google Gemini API (1 API key dùng cho hầu hết tính năng AI)
+
+## Vai trò của Gemini trong hệ thống
+Gemini **không được gọi trực tiếp từ Flutter app**. Luồng đúng là:
+```
+Flutter App → Spring Boot Microservice (ai-service) → Gemini API → trả kết quả → Flutter
+```
+Lý do bắt buộc đi qua Backend:
+- Bảo vệ API Key (không bao giờ để Gemini key trong code Flutter hoặc `.env` của client)
+- Backend kiểm soát được giới hạn Free/Premium (rate limit theo user)
+- Backend có thể cache, log, retry khi Gemini lỗi
+- Dễ đổi sang model khác sau này mà không cần update app
+
+→ Flutter chỉ gọi REST API của Spring Boot (`/api/v1/...`), không bao giờ import Gemini SDK trực tiếp.
+
+## Các tính năng AI dùng Gemini (qua Backend)
+| Tính năng | Gemini dùng cho | Model gợi ý |
+|---|---|---|
+| AI Image Recognition | Nhận diện vật thể trong ảnh (multimodal vision) | `gemini-2.5-flash` hoặc `gemini-2.5-pro` |
+| AI Chatbot | Hỏi đáp ngữ pháp, từ vựng | `gemini-2.5-flash` |
+| AI Writing Checker | Chấm điểm bài viết, sửa lỗi, rewrite | `gemini-2.5-pro` (cần reasoning tốt hơn) |
+| AI Quiz Generator | Sinh câu hỏi từ kho từ vựng | `gemini-2.5-flash` |
+| AI Roleplay | Hội thoại nhiều lượt (multi-turn) | `gemini-2.5-flash` |
+| AI Personalized Learning Path | Phân tích kết quả test, đề xuất lộ trình | `gemini-2.5-flash` |
+| AI Speaking/Pronunciation | Chấm điểm phát âm tổng quát (đơn giản hóa, không phân tích IPA chi tiết từng âm vì Gemini không chuyên về việc này) | `gemini-2.5-flash` + Speech-to-Text riêng nếu cần |
+
+> Ghi chú: Phần Speaking đơn giản hóa so với bản spec ban đầu — không cam kết phân tích IPA chi tiết
+> từng âm tiết (cần engine chuyên dụng như Azure Speech). Gemini chỉ chấm điểm tổng quát + góp ý chung.
 
 ## Kiến trúc thư mục Flutter
 ```
 lib/
-├── core/                  # dùng chung toàn app
+├── core/
 │   ├── constants/         # màu, text style, spacing, routes
 │   ├── theme/             # AppTheme, dark/light
 │   ├── utils/             # helpers, extensions
 │   └── services/          # API client, storage, auth service
-├── features/              # mỗi feature = 1 folder độc lập
-│   ├── auth/              # đăng ký, đăng nhập, placement test
-│   ├── home/              # dashboard, streak, daily challenge
-│   ├── image_scan/        # chụp ảnh, nhận diện AI
-│   ├── flashcard/         # SRS flashcard, deck management
-│   ├── quiz/              # quiz generator, mock exam
-│   ├── speaking/          # pronunciation, roleplay
-│   ├── chatbot/           # AI chatbot, writing checker
-│   ├── reading/           # reading & listening practice
-│   ├── learning_path/     # personalized path, placement
-│   ├── gamification/      # XP, badges, leaderboard, shop
-│   └── analytics/         # dashboard, streak, notifications
-├── shared/                # widgets dùng lại nhiều nơi
+├── features/
+│   ├── auth/
+│   ├── home/
+│   ├── image_scan/        # gọi Spring Boot endpoint /ai/image-recognition
+│   ├── flashcard/
+│   ├── quiz/               # gọi Spring Boot endpoint /ai/quiz-generator
+│   ├── speaking/           # gọi Spring Boot endpoint /ai/speaking-score
+│   ├── chatbot/            # gọi Spring Boot endpoint /ai/chat (có thể SSE/WebSocket)
+│   ├── reading/
+│   ├── learning_path/      # gọi Spring Boot endpoint /ai/learning-path
+│   ├── gamification/
+│   └── analytics/
+├── shared/
 │   ├── widgets/
 │   └── models/
 └── main.dart
 ```
 
 ## Pattern bắt buộc: Feature-first + Clean Architecture
-Mỗi feature có cấu trúc:
 ```
 features/[feature_name]/
 ├── data/
-│   ├── models/            # JSON serializable models
+│   ├── models/            # JSON serializable models — PHẢI khớp DTO của Spring Boot
 │   └── repositories/      # gọi API, trả về Either<Failure, Data>
 ├── domain/
-│   └── entities/          # pure Dart objects
+│   └── entities/
 ├── presentation/
-│   ├── bloc/              # hoặc riverpod provider
+│   ├── bloc/              # hoặc Riverpod provider
 │   ├── pages/
 │   └── widgets/
 ```
@@ -50,7 +76,6 @@ features/[feature_name]/
 ## State Management
 - **Riverpod** (flutter_riverpod + hooks_riverpod)
 - Không dùng setState ngoại trừ widget thuần UI đơn giản
-- Mỗi provider đặt trong file riêng trong thư mục `bloc/` hoặc `providers/`
 
 ## Design System
 - Primary: `#1F4E79` (Deep Blue)
@@ -61,29 +86,33 @@ features/[feature_name]/
 - Font: Google Fonts — **Inter**
 - Spacing: bội số của 4 (4, 8, 12, 16, 24, 32)
 
-## API & Environment
-- Base URL lưu trong `.env` (dùng flutter_dotenv), không hardcode
-- Mọi API call qua `ApiClient` singleton trong `core/services/`
-- Token lưu trong `flutter_secure_storage`
-- Xem chi tiết endpoint → `rules/api.md`
+## Giao tiếp với Backend (Spring Boot Microservices)
+- Base URL trong `.env`, KHÔNG hardcode
+- Mọi gọi API qua `ApiClient` (Dio) trong `core/services/`
+- Token JWT lưu trong `flutter_secure_storage`
+- Spring Boot trả lỗi theo format chuẩn `ProblemDetail` (RFC 7807) → xem `rules/api.md`
+- Các service liên quan AI có thể phản hồi chậm hơn (gọi Gemini) → luôn show loading rõ ràng,
+  timeout dài hơn bình thường (45–60s) cho riêng các endpoint AI
 
 ## Packages chính (pubspec.yaml)
 ```yaml
 flutter_riverpod, hooks_riverpod, riverpod_annotation
-go_router                  # navigation
-dio                        # HTTP client
-flutter_secure_storage     # lưu token
-shared_preferences         # settings nhẹ
-google_fonts               # Inter font
-cached_network_image       # ảnh cache
-image_picker               # chụp/chọn ảnh
-record + audioplayers      # ghi âm & phát âm
-lottie                     # animation
-fl_chart                   # biểu đồ analytics
-flutter_dotenv             # env variables
-freezed + json_serializable # model generation
+go_router
+dio
+flutter_secure_storage
+shared_preferences
+google_fonts
+cached_network_image
+image_picker
+record + audioplayers
+lottie
+fl_chart
+flutter_dotenv
+freezed + json_serializable
 ```
 
-## Quy tắc viết code → xem `rules/workflow.md`
-## UI/UX conventions → xem `rules/design.md`
-## Kỹ thuật Flutter nâng cao → xem `rules/tech-defaults.md`
+## Quy tắc viết code → `rules/workflow.md`
+## UI/UX conventions → `rules/design.md`
+## Kỹ thuật Flutter nâng cao → `rules/tech-defaults.md`
+## API endpoints (Spring Boot) → `rules/api.md`
+## Quy ước tích hợp Gemini AI → `rules/ai-integration.md`

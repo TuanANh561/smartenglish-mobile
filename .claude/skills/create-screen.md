@@ -10,7 +10,7 @@ Tạo nhanh 1 màn hình Flutter mới trong feature đã có sẵn, đúng desi
 
 Ví dụ:
 ```
-@skill create-screen flashcard DeckSelectionScreen "Màn hình chọn bộ thẻ để học, hiển thị grid 2 cột, mỗi card hiển thị tên deck, số thẻ và badge số thẻ cần ôn hôm nay"
+@skill create-screen flashcard DeckSelectionScreen "Màn hình chọn bộ thẻ để học"
 ```
 
 ## Checklist khi tạo màn hình
@@ -22,6 +22,13 @@ Ví dụ:
 - [ ] Dùng màu từ `AppColors`, spacing từ `AppSpacing`
 - [ ] `const` cho widget không thay đổi
 
+### Màn hình gọi tính năng AI (image_scan, speaking, chatbot, quiz, writing, roleplay)
+- [ ] Dùng `AiLoadingIndicator` thay vì loading thông thường
+- [ ] Timeout dài hơn (45–60s) cho request
+- [ ] Có nút Hủy trong lúc đang chờ AI xử lý
+- [ ] Xử lý riêng case `AI_SERVICE_UNAVAILABLE`
+- [ ] Hiển thị số lượt còn lại (Free) TRƯỚC khi gọi API nếu có giới hạn
+
 ### Màn hình có list
 - Dùng `ListView.builder` hoặc `GridView.builder`
 - Có `EmptyView` khi list rỗng
@@ -31,11 +38,10 @@ Ví dụ:
 - Dùng `AppTextField` từ `shared/widgets/`
 - Validate trước khi submit
 - Disable nút submit khi đang loading
-- Show error inline dưới field, không dùng snackbar cho validation
+- Show error inline dưới field
 
 ### Màn hình có Premium gate
 ```dart
-// Bọc tính năng Premium:
 PremiumGateWidget(
   isLocked: !ref.watch(authProvider).isPremium,
   feature: 'AI Roleplay hội thoại',
@@ -77,19 +83,22 @@ class [Name]Screen extends ConsumerWidget {
 
 ## Lưu ý đặc biệt theo loại màn hình
 
-### Màn hình camera (image_scan)
+### Màn hình camera (image_scan → gọi /ai/image-recognition)
 - Xin permission camera trước khi mở
+- Nén ảnh trước khi upload (`imageQuality: 85`)
 - Fallback UI nếu permission bị từ chối
 
-### Màn hình ghi âm (speaking)
+### Màn hình ghi âm (speaking → gọi /ai/speaking/score)
 - Xin permission microphone
 - Visual feedback rõ ràng khi đang ghi (waveform hoặc pulse animation)
-- Nút bấm giữ để nói (Push-to-talk) hoặc toggle
+- Hiển thị kết quả ở mức tổng quát (điểm + nhận xét text), không vẽ phân tích IPA
+  chi tiết từng âm vị (Gemini không chuyên việc này — xem `rules/ai-integration.md`)
 
-### Màn hình chat (chatbot)
+### Màn hình chat (chatbot → gọi /ai/chat/message)
 - `ScrollController` để auto-scroll xuống khi có tin nhắn mới
 - `TextEditingController` dispose đúng cách
-- Show typing indicator khi AI đang trả lời
+- Show typing indicator khi AI đang trả lời (đặc biệt quan trọng vì Gemini qua
+  backend có thể mất vài giây)
 
 ### Màn hình thanh toán (premium)
 - Không lưu thông tin thẻ local

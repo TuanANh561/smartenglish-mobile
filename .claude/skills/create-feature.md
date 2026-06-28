@@ -1,16 +1,18 @@
 # Skill: Tạo Feature Mới
 
 ## Mục đích
-Tạo đủ boilerplate cho 1 feature mới theo đúng cấu trúc Clean Architecture của project.
+Tạo đủ boilerplate cho 1 feature mới theo đúng cấu trúc Clean Architecture, gọi API
+Spring Boot đúng convention (có thể là endpoint AI hoặc endpoint thường).
 
 ## Cách dùng
 ```
-@skill create-feature [tên feature] [mô tả ngắn]
+@skill create-feature [tên feature] [mô tả ngắn] [is_ai_feature: true/false]
 ```
 
 Ví dụ:
 ```
-@skill create-feature flashcard "Màn hình học flashcard SRS, gồm deck list và study mode"
+@skill create-feature flashcard "Màn hình học flashcard SRS" is_ai_feature:false
+@skill create-feature writing_checker "Kiểm tra bài viết qua AI" is_ai_feature:true
 ```
 
 ## Các file sẽ được tạo tự động
@@ -19,51 +21,73 @@ Ví dụ:
 lib/features/[feature]/
 ├── data/
 │   ├── models/
-│   │   └── [feature]_model.dart         # fromJson/toJson với freezed
+│   │   └── [feature]_model.dart         # fromJson/toJson — khớp DTO Spring Boot
 │   └── repositories/
-│       ├── [feature]_repository.dart    # abstract interface
+│       ├── [feature]_repository.dart
 │       └── [feature]_repository_impl.dart
 ├── domain/
 │   └── entities/
-│       └── [feature]_entity.dart        # pure Dart object
+│       └── [feature]_entity.dart
 └── presentation/
     ├── providers/
-    │   └── [feature]_provider.dart      # Riverpod notifier
+    │   └── [feature]_provider.dart
     ├── pages/
-    │   └── [feature]_page.dart          # main page
+    │   └── [feature]_page.dart
     └── widgets/
-        └── [feature]_widget.dart        # widget con chính
+        └── [feature]_widget.dart
 ```
 
-## Template nội dung từng file
-
-### Model (data/models/)
+## Template Repository — nếu `is_ai_feature: true`
 ```dart
-import 'package:freezed_annotation/freezed_annotation.dart';
-part '[feature]_model.freezed.dart';
-part '[feature]_model.g.dart';
+abstract class [Feature]Repository {
+  Future<Either<AppException, [Feature]Result>> process([Feature]Request request);
+}
 
-@freezed
-class [Feature]Model with _$[Feature]Model {
-  const factory [Feature]Model({
-    required String id,
-    // TODO: thêm fields theo API response
-  }) = _[Feature]Model;
+class [Feature]RepositoryImpl implements [Feature]Repository {
+  final ApiClient _apiClient;
 
-  factory [Feature]Model.fromJson(Map<String, dynamic> json)
-      => _$[Feature]ModelFromJson(json);
+  @override
+  Future<Either<AppException, [Feature]Result>> process([Feature]Request request) async {
+    try {
+      // Gọi endpoint /ai/... của Spring Boot — KHÔNG gọi Gemini trực tiếp
+      final response = await _apiClient.post(
+        '/ai/[feature]',
+        data: request.toJson(),
+        timeout: const Duration(seconds: 60), // timeout dài cho AI
+      );
+      return Right([Feature]Result.fromJson(response));
+    } on DioException catch (e) {
+      if (e.response?.data?['code'] == 'AI_SERVICE_UNAVAILABLE') {
+        return Left(AppException.aiUnavailable());
+      }
+      return Left(AppException.fromDio(e));
+    }
+  }
 }
 ```
 
-### Repository (data/repositories/)
+## Template Repository — nếu `is_ai_feature: false`
 ```dart
 abstract class [Feature]Repository {
   Future<Either<AppException, List<[Feature]Model>>> getAll();
-  // TODO: thêm methods theo yêu cầu
+}
+
+class [Feature]RepositoryImpl implements [Feature]Repository {
+  final ApiClient _apiClient;
+
+  @override
+  Future<Either<AppException, List<[Feature]Model>>> getAll() async {
+    try {
+      final response = await _apiClient.get('/[feature]');
+      return Right((response as List).map((e) => [Feature]Model.fromJson(e)).toList());
+    } on DioException catch (e) {
+      return Left(AppException.fromDio(e));
+    }
+  }
 }
 ```
 
-### Provider (presentation/providers/)
+## Provider (presentation/providers/)
 ```dart
 @riverpod
 class [Feature]Notifier extends _$[Feature]Notifier {
@@ -81,7 +105,7 @@ class [Feature]Notifier extends _$[Feature]Notifier {
 }
 ```
 
-### Page (presentation/pages/)
+## Page (presentation/pages/)
 ```dart
 class [Feature]Page extends ConsumerStatefulWidget {
   const [Feature]Page({super.key});
@@ -103,7 +127,7 @@ class _[Feature]PageState extends ConsumerState<[Feature]Page> {
     return Scaffold(
       appBar: AppBar(title: const Text('[Feature Title]')),
       body: state.when(
-        loading: () => const LoadingOverlay(),
+        loading: () => const LoadingOverlay(),  // dùng AiLoadingIndicator nếu is_ai_feature
         error: (e, _) => ErrorView(onRetry: () => ref.read([feature]NotifierProvider.notifier).load()),
         data: (data) => _buildContent(data),
       ),
@@ -111,7 +135,6 @@ class _[Feature]PageState extends ConsumerState<[Feature]Page> {
   }
 
   Widget _buildContent([Feature]State data) {
-    // TODO: implement
     return const SizedBox.shrink();
   }
 }
@@ -120,4 +143,4 @@ class _[Feature]PageState extends ConsumerState<[Feature]Page> {
 ## Sau khi tạo file
 1. Chạy: `dart run build_runner build --delete-conflicting-outputs`
 2. Đăng ký route mới trong `core/constants/routes.dart`
-3. Đăng ký provider trong `core/di/providers.dart` (nếu dùng DI manual)
+3. Xác nhận với backend dev đúng endpoint path và format response trước khi tích hợp thật

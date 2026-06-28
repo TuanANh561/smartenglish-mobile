@@ -20,7 +20,6 @@ premiumGold   = Color(0xFFF59E0B)   // badge Premium
 
 ### Spacing (dùng bội số 4)
 ```dart
-// core/constants/app_spacing.dart
 xs  = 4.0
 sm  = 8.0
 md  = 12.0
@@ -31,7 +30,6 @@ xxl = 32.0
 
 ### Border Radius
 ```dart
-// core/constants/app_radius.dart
 card   = 16.0
 button = 12.0
 chip   = 8.0
@@ -60,7 +58,7 @@ Container(
   decoration: BoxDecoration(
     color: AppColors.surface,
     borderRadius: BorderRadius.circular(AppRadius.card),
-    boxShadow: AppShadows.card,   // shadow nhẹ định nghĩa sẵn
+    boxShadow: AppShadows.card,
   ),
   padding: EdgeInsets.all(AppSpacing.lg),
 )
@@ -69,51 +67,45 @@ Container(
 ### Nút chính (Primary Button)
 - Background: `AppColors.primary`
 - Text: trắng, Inter SemiBold 15px
-- Height: 52px, full width hoặc rộng vừa đủ
+- Height: 52px
 - BorderRadius: 12px
-- Loading state: CircularProgressIndicator màu trắng, disable onPressed
+- Loading state: CircularProgressIndicator trắng, disable onPressed
 
 ### Nút phụ (Outline Button)
 - Border: 1.5px `AppColors.primary`
 - Text: `AppColors.primary`
-- Cùng kích thước nút chính
 
 ### Input field
-- Background: `Color(0xFFF1F5F9)` (xám nhạt)
-- Border: none (không border khi idle), border xanh khi focused
+- Background: `Color(0xFFF1F5F9)`
+- Border: none khi idle, border xanh khi focused
 - BorderRadius: 12px
-- Prefix icon màu `AppColors.textSecondary`
 - Height: 52px
 
 ### Bottom Tab Bar
 - 5 tab: Home / Learn / AI / Stats / Profile
-- Icon + label nhỏ
 - Active: `AppColors.primary`, Inactive: `AppColors.textSecondary`
-- Nền trắng, shadow nhẹ phía trên
 
 ---
 
 ## Màn hình Mobile
 - Thiết kế cho 375px width (chuẩn iPhone)
 - Dùng `SafeArea` tất cả các page
-- `SingleChildScrollView` khi nội dung có thể dài
+- `SingleChildScrollView` khi nội dung dài
 - Không hardcode height — dùng `MediaQuery` hoặc `Flexible/Expanded`
 
-## Màn hình Web Admin (Flutter Web)
-- Sidebar trái 240px, nền `AppColors.primary`
-- Nội dung chính bên phải, nền `AppColors.background`
-- Dùng `LayoutBuilder` để responsive (tablet/desktop)
-- Bảng dữ liệu dùng `DataTable` hoặc custom table widget
+## Loading state cho tính năng AI (quan trọng — Gemini qua backend có thể chậm)
+- Dùng skeleton loading hoặc `LoadingOverlay` riêng cho tính năng AI, không spinner khô khan
+- Sau 3 giây vẫn loading → đổi text động viên ("Sắp xong rồi...")
+- Luôn có nút Hủy cho các tác vụ AI dài (upload ảnh, ghi âm, chờ chatbot)
 
----
-
-## Một số widget tái sử dụng đã có sẵn (shared/widgets/)
+## Một số widget tái sử dụng (shared/widgets/)
 - `AppButton` — primary/outline/text variants
 - `AppTextField` — input chuẩn design
 - `AppCard` — card với shadow mặc định
 - `AppBadge` — chip nhỏ (Free/Premium/CEFR level)
 - `PremiumGateWidget` — hiện khi tính năng cần Premium
 - `LoadingOverlay` — loading toàn màn hình
+- `AiLoadingIndicator` — loading riêng cho tác vụ gọi AI, có text động viên + nút hủy
 - `ErrorView` — màn hình lỗi có nút retry
 - `EmptyView` — màn hình trống có illustration
 - `XpBanner` — banner thông báo nhận XP
