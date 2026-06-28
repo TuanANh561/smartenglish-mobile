@@ -201,7 +201,7 @@ features/[feature]/
 ### 1. Clone repository
 
 ```bash
-git clone https://github.com/[your-username]/smartenglish-mobile.git
+git clone https://github.com/TuanANh561/smartenglish-mobile.git
 cd smartenglish-mobile
 ```
 
@@ -290,8 +290,8 @@ Font: **Inter** (Google Fonts) · Border radius card: `16px` · Spacing: bội s
 |Nguyễn Tuấn Anh|—   |Mobile Developer — UI & Integration|
 
 **Giáo viên hướng dẫn:** *(tên cô/thầy)*  
-**Trường:** *(tên trường)*  
-**Năm:** 2025
+**Trường:** *(Trường Đại Học Công Nghiệp Tp. Hồ Chí Minh - IUH)*  
+**Năm:** 2026
 
 -----
 
@@ -316,6 +316,6 @@ Không sử dụng cho mục đích thương mại khi chưa có sự đồng ý
 
 <div align="center">
 
-Made with ❤️ by SmartEnglish AI Team · 2025
+Made with ❤️ by SmartEnglish AI Team · 2026
 
 </div>
